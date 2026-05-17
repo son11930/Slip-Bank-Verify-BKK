@@ -1,0 +1,31 @@
+# Environments
+.env
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Gemini/ECC / AI Tools
+.gemini/
+.agents/
+AGENTS.md
+RULES.md
+RULES discord.md
+agents/
+commands/
+hooks/
+mcp-configs/
+rules/
+scripts/
+skills/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Tests
+tests/
