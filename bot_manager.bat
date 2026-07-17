@@ -51,9 +51,9 @@ goto MENU
 
 :START_UPDATE
 cls
-echo [INFO] Starting Bot with Git Pull & Dependency Update...
+echo [INFO] Starting Bot with Git Pull ^& Dependency Update...
 echo --------------------------------------------------------------
-ssh %SSH_HOST% "cd %BOT_PATH% && echo '[1/3] Pulling latest code from Git...' && git pull && echo '[2/3] Checking and updating Python dependencies...' && venv/bin/pip install -r requirements.txt -q && echo '[3/3] Starting screen session (%SCREEN_NAME%)...' && screen -dmS %SCREEN_NAME% bash -c 'cd %BOT_PATH% && source venv/bin/activate && python3 main.py' && echo '[SUCCESS] Bot started in screen session: %SCREEN_NAME%'"
+ssh %SSH_HOST% "cd %BOT_PATH%; echo '[1/3] Pulling latest code from Git...'; git pull; echo '[2/3] Checking and updating Python dependencies...'; venv/bin/pip install -r requirements.txt -q; echo '[3/3] Starting screen session (%SCREEN_NAME%)...'; screen -dmS %SCREEN_NAME% bash -c 'cd %BOT_PATH% && source venv/bin/activate && python3 main.py'; echo '[SUCCESS] Bot started in screen session: %SCREEN_NAME%'"
 echo --------------------------------------------------------------
 echo Press any key to return to menu...
 pause >nul
@@ -63,7 +63,7 @@ goto MENU
 cls
 echo [INFO] Stopping Bot (%SCREEN_NAME%)...
 echo --------------------------------------------------------------
-ssh %SSH_HOST% "screen -S %SCREEN_NAME% -X quit 2>/dev/null && echo '[SUCCESS] Screen session (%SCREEN_NAME%) stopped.' || echo '[INFO] Screen session not found or already stopped.'; pkill -f 'python.*main.py' 2>/dev/null && echo '[SUCCESS] Remaining python main.py processes terminated.' || echo '[INFO] No remaining Python processes found.'"
+ssh %SSH_HOST% "for s in $(screen -ls | grep -E '\.%SCREEN_NAME%[[:space:]]' | awk '{print $1}'); do screen -S \"$s\" -X quit 2>/dev/null; done; pkill -f 'python.*main.py' 2>/dev/null; echo '[SUCCESS] Screen session (%SCREEN_NAME%) and main.py processes stopped safely.'"
 echo --------------------------------------------------------------
 echo Press any key to return to menu...
 pause >nul
@@ -73,7 +73,7 @@ goto MENU
 cls
 echo [INFO] Updating Code (Git Pull) and Dependencies...
 echo --------------------------------------------------------------
-ssh %SSH_HOST% "cd %BOT_PATH% && echo '[1/2] Pulling latest code from Git...' && git pull && echo '[2/2] Updating dependencies...' && venv/bin/pip install -r requirements.txt"
+ssh %SSH_HOST% "cd %BOT_PATH%; echo '[1/2] Pulling latest code from Git...'; git pull; echo '[2/2] Updating dependencies...'; venv/bin/pip install -r requirements.txt"
 echo --------------------------------------------------------------
 echo Press any key to return to menu...
 pause >nul
@@ -83,7 +83,7 @@ goto MENU
 cls
 echo [INFO] Stopping, Updating, and Restarting Bot...
 echo --------------------------------------------------------------
-ssh %SSH_HOST% "echo '[1/4] Stopping current bot...' && (screen -S %SCREEN_NAME% -X quit 2>/dev/null || true) && (pkill -f 'python.*main.py' 2>/dev/null || true) && sleep 1 && cd %BOT_PATH% && echo '[2/4] Pulling latest code from Git...' && git pull && echo '[3/4] Updating dependencies...' && venv/bin/pip install -r requirements.txt -q && echo '[4/4] Starting new screen session (%SCREEN_NAME%)...' && screen -dmS %SCREEN_NAME% bash -c 'cd %BOT_PATH% && source venv/bin/activate && python3 main.py' && echo '[SUCCESS] Bot restarted successfully.'"
+ssh %SSH_HOST% "echo '[1/4] Stopping current bot...'; for s in $(screen -ls | grep -E '\.%SCREEN_NAME%[[:space:]]' | awk '{print $1}'); do screen -S \"$s\" -X quit 2>/dev/null; done; pkill -f 'python.*main.py' 2>/dev/null; sleep 1; cd %BOT_PATH%; echo '[2/4] Pulling latest code from Git...'; git pull; echo '[3/4] Updating dependencies...'; venv/bin/pip install -r requirements.txt -q; echo '[4/4] Starting new screen session (%SCREEN_NAME%)...'; screen -dmS %SCREEN_NAME% bash -c 'cd %BOT_PATH% && source venv/bin/activate && python3 main.py'; echo '[SUCCESS] Bot restarted successfully.'"
 echo --------------------------------------------------------------
 echo Press any key to return to menu...
 pause >nul
@@ -93,7 +93,7 @@ goto MENU
 cls
 echo [INFO] Quick Restarting Bot (No Git Pull)...
 echo --------------------------------------------------------------
-ssh %SSH_HOST% "echo '[1/2] Stopping current bot...' && (screen -S %SCREEN_NAME% -X quit 2>/dev/null || true) && (pkill -f 'python.*main.py' 2>/dev/null || true) && sleep 1 && echo '[2/2] Starting screen session (%SCREEN_NAME%)...' && cd %BOT_PATH% && screen -dmS %SCREEN_NAME% bash -c 'cd %BOT_PATH% && source venv/bin/activate && python3 main.py' && echo '[SUCCESS] Bot restarted immediately.'"
+ssh %SSH_HOST% "echo '[1/2] Stopping current bot...'; for s in $(screen -ls | grep -E '\.%SCREEN_NAME%[[:space:]]' | awk '{print $1}'); do screen -S \"$s\" -X quit 2>/dev/null; done; pkill -f 'python.*main.py' 2>/dev/null; sleep 1; echo '[2/2] Starting screen session (%SCREEN_NAME%)...'; cd %BOT_PATH%; screen -dmS %SCREEN_NAME% bash -c 'cd %BOT_PATH% && source venv/bin/activate && python3 main.py'; echo '[SUCCESS] Bot restarted immediately.'"
 echo --------------------------------------------------------------
 echo Press any key to return to menu...
 pause >nul
@@ -116,7 +116,7 @@ goto MENU
 cls
 echo [INFO] Fetching current screen buffer output (Snapshot)...
 echo --------------------------------------------------------------
-ssh %SSH_HOST% "screen -S %SCREEN_NAME% -X hardcopy /tmp/%SCREEN_NAME%_snapshot.log 2>/dev/null && echo '=== SCREEN SNAPSHOT ===' && cat /tmp/%SCREEN_NAME%_snapshot.log || echo '[ERROR] Screen session (%SCREEN_NAME%) is not running or buffer empty.'"
+ssh %SSH_HOST% "screen -S %SCREEN_NAME% -X hardcopy /tmp/%SCREEN_NAME%_snapshot.log 2>/dev/null; if [ -f /tmp/%SCREEN_NAME%_snapshot.log ]; then echo '=== SCREEN SNAPSHOT ==='; cat /tmp/%SCREEN_NAME%_snapshot.log; rm -f /tmp/%SCREEN_NAME%_snapshot.log; else echo '[ERROR] Screen session (%SCREEN_NAME%) is not running or buffer empty.'; fi"
 echo --------------------------------------------------------------
 echo Press any key to return to menu...
 pause >nul
