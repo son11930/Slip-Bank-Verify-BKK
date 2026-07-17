@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from typing import Any, Dict, Optional
 import discord
 from discord.ext import commands
@@ -163,6 +164,26 @@ class SlipVerifier(commands.Cog):
         receiver = sanitize_discord_text(receiver_raw)
 
         trans_ref = sanitize_discord_text(slip_data.get('transRef', '-'))
+
+        # Check if receiver matches the store account keywords
+        store_keywords_raw = os.getenv("STORE_RECEIVER_KEYWORDS", "เนติณัฏฐ์,netinat,7892,2085257892")
+        store_keywords = [kw.strip().lower() for kw in store_keywords_raw.split(",") if kw.strip()]
+
+        receiver_full_str = (
+            str(receiver_obj).lower() if isinstance(receiver_obj, dict) else str(receiver_raw).lower()
+        )
+        is_store_account = any(kw in receiver_full_str for kw in store_keywords)
+
+        if not is_store_account and store_keywords:
+            await message.channel.send(
+                f"⚠️ **สลิปถูกต้อง แต่ไม่ใช่บัญชีของทางร้าน!**\n"
+                f"💰 **จำนวน:** `{amount_float:,.2f} บาท`\n"
+                f"📥 **โอนไปยัง:** `{receiver}`\n"
+                f"📤 **จาก:** `{sender}`\n"
+                f"🔖 **อ้างอิง:** `{trans_ref}`",
+                reference=message.to_reference(fail_if_not_exists=False)
+            )
+            return
 
         await message.channel.send(
             f"✅ **ตรวจสอบสลิปสำเร็จ!**\n"
