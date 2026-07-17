@@ -63,7 +63,7 @@ goto MENU
 cls
 echo [INFO] Stopping Bot (%SCREEN_NAME%)...
 echo --------------------------------------------------------------
-ssh %SSH_HOST% "for s in $(screen -ls | grep -E '\.%SCREEN_NAME%[[:space:]]' | awk '{print $1}'); do screen -S \"$s\" -X quit 2>/dev/null; done; pkill -f 'python.*main.py' 2>/dev/null; echo '[SUCCESS] Screen session (%SCREEN_NAME%) and main.py processes stopped safely.'"
+ssh %SSH_HOST% "for s in $(screen -ls | grep -E '\.%SCREEN_NAME%[[:space:]]' | awk '{print $1}'); do screen -S \"$s\" -X quit 2>/dev/null || true; done; pkill -f 'python.*main.py' 2>/dev/null || true; echo '[SUCCESS] Screen session (%SCREEN_NAME%) and main.py processes stopped safely.'"
 echo --------------------------------------------------------------
 echo Press any key to return to menu...
 pause >nul
@@ -83,7 +83,7 @@ goto MENU
 cls
 echo [INFO] Stopping, Updating, and Restarting Bot...
 echo --------------------------------------------------------------
-ssh %SSH_HOST% "echo '[1/4] Stopping current bot...'; for s in $(screen -ls | grep -E '\.%SCREEN_NAME%[[:space:]]' | awk '{print $1}'); do screen -S \"$s\" -X quit 2>/dev/null; done; pkill -f 'python.*main.py' 2>/dev/null; sleep 1; cd %BOT_PATH%; echo '[2/4] Pulling latest code from Git...'; git pull; echo '[3/4] Updating dependencies...'; venv/bin/pip install -r requirements.txt -q; echo '[4/4] Starting new screen session (%SCREEN_NAME%)...'; screen -dmS %SCREEN_NAME% bash -c 'cd %BOT_PATH% && source venv/bin/activate && python3 main.py'; echo '[SUCCESS] Bot restarted successfully.'"
+ssh %SSH_HOST% "echo '[1/4] Stopping current bot...'; for s in $(screen -ls | grep -E '\.%SCREEN_NAME%[[:space:]]' | awk '{print $1}'); do screen -S \"$s\" -X quit 2>/dev/null || true; done; pkill -f 'python.*main.py' 2>/dev/null || true; sleep 1; cd %BOT_PATH%; echo '[2/4] Pulling latest code from Git...'; git pull; echo '[3/4] Updating dependencies...'; venv/bin/pip install -r requirements.txt -q; echo '[4/4] Starting new screen session (%SCREEN_NAME%)...'; screen -dmS %SCREEN_NAME% bash -c 'cd %BOT_PATH% && source venv/bin/activate && python3 main.py'; echo '[SUCCESS] Bot restarted successfully.'"
 echo --------------------------------------------------------------
 echo Press any key to return to menu...
 pause >nul
@@ -93,7 +93,7 @@ goto MENU
 cls
 echo [INFO] Quick Restarting Bot (No Git Pull)...
 echo --------------------------------------------------------------
-ssh %SSH_HOST% "echo '[1/2] Stopping current bot...'; for s in $(screen -ls | grep -E '\.%SCREEN_NAME%[[:space:]]' | awk '{print $1}'); do screen -S \"$s\" -X quit 2>/dev/null; done; pkill -f 'python.*main.py' 2>/dev/null; sleep 1; echo '[2/2] Starting screen session (%SCREEN_NAME%)...'; cd %BOT_PATH%; screen -dmS %SCREEN_NAME% bash -c 'cd %BOT_PATH% && source venv/bin/activate && python3 main.py'; echo '[SUCCESS] Bot restarted immediately.'"
+ssh %SSH_HOST% "echo '[1/2] Stopping current bot...'; for s in $(screen -ls | grep -E '\.%SCREEN_NAME%[[:space:]]' | awk '{print $1}'); do screen -S \"$s\" -X quit 2>/dev/null || true; done; pkill -f 'python.*main.py' 2>/dev/null || true; sleep 1; echo '[2/2] Starting screen session (%SCREEN_NAME%)...'; cd %BOT_PATH%; screen -dmS %SCREEN_NAME% bash -c 'cd %BOT_PATH% && source venv/bin/activate && python3 main.py'; echo '[SUCCESS] Bot restarted immediately.'"
 echo --------------------------------------------------------------
 echo Press any key to return to menu...
 pause >nul
