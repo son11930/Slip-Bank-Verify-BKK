@@ -1,6 +1,12 @@
 import io
+import logging
 from PIL import Image
 from pyzbar.pyzbar import decode
+
+logger = logging.getLogger(__name__)
+
+# Set explicit pixel limit (25 Megapixels) to prevent decompression bombs (DoS)
+Image.MAX_IMAGE_PIXELS = 25_000_000
 
 
 def scan_qr_from_bytes(image_bytes: bytes) -> str | None:
@@ -16,6 +22,9 @@ def scan_qr_from_bytes(image_bytes: bytes) -> str | None:
             # คืนค่าข้อความจาก QR Code ตัวแรกที่พบ
             return decoded_objects[0].data.decode('utf-8')
         return None
+    except Image.DecompressionBombError as e:
+        logger.warning(f"[QR Scanner] Decompression bomb detected or image too large: {e}")
+        return None
     except Exception as e:
-        print(f"[QR Scanner] Error: {e}")
+        logger.error(f"[QR Scanner] Error decoding QR from bytes: {e}")
         return None

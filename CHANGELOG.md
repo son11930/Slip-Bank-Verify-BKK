@@ -21,5 +21,14 @@
 - Added a 10-second timeout to `aiohttp` API requests in `utils/easyslip.py` to prevent resource exhaustion.
 - Implemented unit tests for `utils/easyslip.py` using `pytest` and `aioresponses` with 100% pass rate.
 - Added `/bank` slash command feature to automatically provide bank account details and QR code when requested.
-- Enhanced keyword detection to prompt users to use the `/bank` command with support for variations like "ขอบัญชี", "ขอเลข", "ขอธนาคาร" for better UX.
 - Implemented and passed automated unit tests for the `/bank` feature to maintain high test coverage.
+
+## 2026-07-18
+- Migrated core slip verification engine from EasySlip (`utils/easyslip.py`) to **SlipOK API v1.13** (`utils/slipok.py`).
+- Updated `cogs/slip_verifier.py` to use `SlipOKAPI` and removed `AdminReviewView` (Approve/Reject buttons) per user specification (`manual top-up by staff`).
+- Implemented immediate notification alerts when duplicate slips (`code 1012`) or invalid slips (`code 1005-1008`) are detected.
+- Hardened `utils/slipok.py` with shared `aiohttp.ClientSession` for connection keep-alive/TLS reuse and explicit HTTP 5xx error handling.
+- Offloaded CPU-bound `scan_qr_from_bytes` (`PIL.Image.open` and `pyzbar.decode`) to `asyncio.to_thread` to prevent blocking the Discord async event loop.
+- Added decompression bomb protection (`Image.MAX_IMAGE_PIXELS = 25_000_000`), attachment limits per message (`[:3]`), and display name sanitization (`sanitize_discord_text`) against mention injection (`@everyone`).
+- Created thorough unit tests (`tests/test_slipok.py`, `tests/test_slip_verifier.py`, `tests/test_qr_scanner.py`) achieving **93% total test coverage** across `cogs/` and `utils/`.
+- Executed parallel subagent reviews (`code-reviewer` and `security-reviewer`) ensuring clean architecture and zero security vulnerabilities.

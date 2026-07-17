@@ -1,160 +1,178 @@
+import asyncio
+import logging
+from typing import Any, Dict, Optional
 import discord
 from discord.ext import commands
 from utils.qr_scanner import scan_qr_from_bytes
-from utils.easyslip import EasySlipAPI
+from utils.slipok import SlipOKAPI, SlipDuplicateError, SlipOKError
+
+logger = logging.getLogger(__name__)
 
 
-class AdminReviewView(discord.ui.View):
-    def __init__(self):
-        super().__init__(timeout=None)
-
-    @discord.ui.button(label="Approve",
-                       style=discord.ButtonStyle.success,
-                       custom_id="approve_slip")
-    async def approve_button(
-            self,
-            interaction: discord.Interaction,
-            button: discord.ui.Button):
-        await interaction.response.send_message(f"⚠️ สลิปนี้ถูกยืนยันโดย {interaction.user.mention} ให้ Admin ตรวจสอบอีกที", ephemeral=False)
-        self.stop()
-
-    @discord.ui.button(label="Reject",
-                       style=discord.ButtonStyle.danger,
-                       custom_id="reject_slip")
-    async def reject_button(
-            self,
-            interaction: discord.Interaction,
-            button: discord.ui.Button):
-        await interaction.response.send_message(f"❌ สลิปนี้ถูกปฏิเสธโดย {interaction.user.mention}", ephemeral=False)
-        self.stop()
+def sanitize_discord_text(text: Any) -> str:
+    """Sanitize text to prevent Discord markdown breakage or mention injection."""
+    if text is None:
+        return "Unknown"
+    return str(text).replace('`', "'").replace('@', '`@`\u200b')
 
 
 class SlipVerifier(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self.easyslip = EasySlipAPI()
+        self.slipok = SlipOKAPI()
+
+    async def cog_unload(self) -> None:
+        await self.slipok.close()
 
     @commands.Cog.listener()
-    async def on_message(self, message: discord.Message):
-        if message.author.bot:
+    async def on_message(self, message: discord.Message) -> None:
+        if message.author.bot or not message.attachments:
             return
 
-        if not message.attachments:
+        # Limit to 3 attachments per message to prevent DoS
+        for attachment in message.attachments[:3]:
+            if attachment.content_type and attachment.content_type.startswith('image/'):
+                await self._process_attachment(attachment, message)
+
+    async def _process_attachment(self, attachment: discord.Attachment, message: discord.Message) -> None:
+        if attachment.size > 5 * 1024 * 1024:
+            await message.channel.send(
+                "❌ ไฟล์รูปภาพมีขนาดใหญ่เกินไป (จำกัด 5MB) โปรดลดขนาดรูปภาพ",
+                reference=message
+            )
             return
 
-        for attachment in message.attachments:
-            if attachment.content_type and attachment.content_type.startswith(
-                    'image/'):
-                # ตรวจสอบขนาดไฟล์ไม่เกิน 5MB (5 * 1024 * 1024 bytes) ป้องกัน
-                # DoS
-                if attachment.size > 5 * 1024 * 1024:
-                    await message.channel.send("❌ ไฟล์รูปภาพมีขนาดใหญ่เกินไป (จำกัด 5MB) โปรดลดขนาดรูปภาพ", reference=message)
-                    continue
+        try:
+            image_bytes = await attachment.read()
+            # Run CPU-bound QR decoding in a background thread to prevent blocking event loop
+            qr_data = await asyncio.to_thread(scan_qr_from_bytes, image_bytes)
+            
+            filename = attachment.filename or 'slip.jpg'
+            content_type = attachment.content_type or 'image/jpeg'
 
-                try:
-                    image_bytes = await attachment.read()
+            slip_data = await self._verify_slip_data(image_bytes, qr_data, filename, content_type, message)
+            if slip_data:
+                await self._handle_verification_success(slip_data, message)
 
-                    qr_data = scan_qr_from_bytes(image_bytes)
+        except Exception as e:
+            logger.error(f"[SlipVerifier] Error processing attachment {attachment.filename}: {e}", exc_info=True)
+            await message.channel.send(
+                "❌ เกิดข้อผิดพลาดในระบบขณะประมวลผลรูปภาพ โปรดลองใหม่อีกครั้ง",
+                reference=message
+            )
 
-                    slip_data = None
-                    is_truemoney = False
-                    is_fake = False
-                    fake_reason = ""
+    async def _verify_slip_data(
+        self,
+        image_bytes: bytes,
+        qr_data: Optional[str],
+        filename: str,
+        content_type: str,
+        message: discord.Message
+    ) -> Optional[Dict[str, Any]]:
+        if qr_data:
+            try:
+                return await self.slipok.verify_payload(qr_data, log=True)
+            except SlipDuplicateError as dup_e:
+                await self._send_duplicate_warning(dup_e.message, message)
+                return None
+            except SlipOKError as payload_err:
+                # Fallback to image check if QR payload verification fails
+                return await self._fallback_image_check(image_bytes, filename, content_type, message, payload_err)
+        else:
+            return await self._fallback_image_check(image_bytes, filename, content_type, message)
 
-                    if qr_data:
-                        try:
-                            slip_data = await self.easyslip.verify_bank_payload(qr_data)
-                        except Exception as e:
-                            # มี QR แต่ตรวจสอบไม่ผ่าน อาจเป็นสลิปปลอม หรือ QR
-                            # ทั่วไป
-                            is_fake = True
-                            fake_reason = str(e)
+    async def _fallback_image_check(
+        self,
+        image_bytes: bytes,
+        filename: str,
+        content_type: str,
+        message: discord.Message,
+        previous_err: Optional[SlipOKError] = None
+    ) -> Optional[Dict[str, Any]]:
+        try:
+            return await self.slipok.verify_image(
+                image_bytes, log=True, filename=filename, content_type=content_type
+            )
+        except SlipDuplicateError as dup_e:
+            await self._send_duplicate_warning(dup_e.message, message)
+            return None
+        except SlipOKError as img_err:
+            await self._handle_slipok_error(img_err, message, had_qr=previous_err is not None)
+            return None
 
-                    if not qr_data and not slip_data:
-                        try:
-                            slip_data = await self.easyslip.verify_truewallet_image(image_bytes)
-                            is_truemoney = True
-                        except Exception as e:
-                            error_msg = str(e).lower()
-                            # ถ้าเป็นรูปทั่วไป (ไม่เหมือนสลิปเลย) ให้ปล่อยผ่าน
-                            if "not a valid" in error_msg or "invalid image" in error_msg or "size" in error_msg:
-                                continue
-                            # ถ้าเหมือนสลิปแต่หาไม่เจอ ถือว่าปลอม
-                            is_fake = True
-                            fake_reason = str(e)
+    async def _handle_slipok_error(self, err: SlipOKError, message: discord.Message, had_qr: bool) -> None:
+        # Check if error code indicates non-slip image or non-payment QR
+        if err.code in [1005, 1006, 1007, 1008]:
+            if err.code == 1008 and had_qr:
+                await message.channel.send(
+                    "⚠️ **QR ดังกล่าวไม่ใช่ QR สำหรับการตรวจสอบการชำระเงิน**",
+                    reference=message
+                )
+            return
 
-                    if slip_data and slip_data.get('isDuplicate'):
-                        is_fake = True
-                        fake_reason = "สลิปนี้ถูกใช้งานไปแล้ว (Duplicate)"
+        if not had_qr and any(
+            kw in str(err.message).lower()
+            for kw in ["no qr", "1007", "1005", "1006", "invalid image"]
+        ):
+            return
 
-                    if is_fake:
-                        view = AdminReviewView()
-                        await message.channel.send(
-                            f"⚠️ **พบปัญหาการตรวจสอบสลิป (อาจเป็นสลิปปลอมหรือผิดพลาด)**\n"
-                            f"📝 **สาเหตุ:** `{fake_reason}`\n"
-                            f"\n👮‍♂️ รอแอดมินตรวจสอบ...",
-                            reference=message,
-                            view=view
-                        )
-                        continue
+        # Protect against reflecting upstream/unknown errors (5xx/4xx HTML or WAF responses)
+        if err.code is None or err.code not in range(1000, 1020):
+            logger.error(f"[SlipVerifier] Upstream or unrecognized SlipOK error ({err.code}): {err.message}")
+            await message.channel.send(
+                "⚠️ **พบปัญหาในการติดต่อระบบตรวจสอบสลิป โปรดลองใหม่อีกครั้งภายหลัง**",
+                reference=message
+            )
+            return
 
-                    if not slip_data:
-                        continue
+        await message.channel.send(
+            f"⚠️ **พบปัญหาการตรวจสอบสลิป (อาจเป็นสลิปปลอมหรือไม่ถูกต้อง)**\n📝 **สาเหตุ:** `{sanitize_discord_text(err.message)}`",
+            reference=message
+        )
 
-                    if is_truemoney:
-                        amount = slip_data.get('amountInSlip')
-                        sender = slip_data.get(
-                            'rawSlip',
-                            {}).get(
-                            'sender',
-                            {}).get(
-                            'name',
-                            'Unknown')
-                        receiver = slip_data.get(
-                            'rawSlip',
-                            {}).get(
-                            'receiver',
-                            {}).get(
-                            'name',
-                            'Unknown')
-                    else:
-                        amount = slip_data.get(
-                            'rawSlip', {}).get(
-                            'amount', {}).get('amount')
-                        sender = slip_data.get(
-                            'rawSlip',
-                            {}).get(
-                            'sender',
-                            {}).get(
-                            'account',
-                            {}).get(
-                            'name',
-                            {}).get(
-                            'th',
-                            'Unknown')
-                        receiver = slip_data.get(
-                            'rawSlip',
-                            {}).get(
-                            'receiver',
-                            {}).get(
-                            'account',
-                            {}).get(
-                            'name',
-                            {}).get(
-                            'th',
-                            'Unknown')
+    async def _send_duplicate_warning(self, reason: str, message: discord.Message) -> None:
+        await message.channel.send(
+            f"❌ **สลิปซ้ำ! ถูกใช้งานไปแล้ว**\n🕒 **รายละเอียด:** `{sanitize_discord_text(reason)}`",
+            reference=message
+        )
 
-                    await message.channel.send(
-                        f"✅ **ตรวจสอบสลิปสำเร็จ!**\n"
-                        f"💰 **ยอดเงิน:** `{amount:,.2f} บาท`\n"
-                        f"📤 **จาก:** `{sender}`\n"
-                        f"📥 **ไปยัง:** `{receiver}`",
-                        reference=message
-                    )
-                except Exception as e:
-                    print(f"[SlipVerifier] Error processing image: {e}")
-                    await message.channel.send("❌ เกิดข้อผิดพลาดในระบบขณะประมวลผลรูปภาพ โปรดลองใหม่อีกครั้ง", reference=message)
+    async def _handle_verification_success(self, slip_data: Dict[str, Any], message: discord.Message) -> None:
+        if slip_data.get('isDuplicate') or slip_data.get('code') == 1012:
+            msg = slip_data.get('message', 'สลิปนี้ถูกใช้งานไปแล้ว')
+            await self._send_duplicate_warning(msg, message)
+            return
+
+        amount = slip_data.get('amount', 0.0)
+        try:
+            amount_float = float(amount)
+        except (ValueError, TypeError):
+            amount_float = 0.0
+
+        sender_obj = slip_data.get('sender') or {}
+        sender_raw = (
+            sender_obj.get('displayName') or sender_obj.get('name') or 'Unknown'
+            if isinstance(sender_obj, dict) else str(sender_obj)
+        )
+        sender = sanitize_discord_text(sender_raw)
+
+        receiver_obj = slip_data.get('receiver') or {}
+        receiver_raw = (
+            receiver_obj.get('displayName') or receiver_obj.get('name') or 'Unknown'
+            if isinstance(receiver_obj, dict) else str(receiver_obj)
+        )
+        receiver = sanitize_discord_text(receiver_raw)
+
+        trans_ref = sanitize_discord_text(slip_data.get('transRef', '-'))
+
+        await message.channel.send(
+            f"✅ **ตรวจสอบสลิปสำเร็จ!**\n"
+            f"💰 **ยอดเงิน:** `{amount_float:,.2f} บาท`\n"
+            f"📤 **จาก:** `{sender}`\n"
+            f"📥 **ไปยัง:** `{receiver}`\n"
+            f"🔖 **อ้างอิง:** `{trans_ref}`",
+            reference=message
+        )
 
 
-async def setup(bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(SlipVerifier(bot))
