@@ -26,7 +26,7 @@ class BankInfo(commands.Cog):
         if any(keyword in content for keyword in keywords):
             await message.channel.send(
                 f"{message.author.mention} กรุณาพิมพ์คำสั่ง `/bank` เพื่อดูข้อมูลบัญชีธนาคารและช่องทางโอนเงินครับ 🏦",
-                reference=message
+                reference=message.to_reference(fail_if_not_exists=False)
             )
 
     @app_commands.command(name="bank",

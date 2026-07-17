@@ -38,7 +38,7 @@ class SlipVerifier(commands.Cog):
         if attachment.size > 5 * 1024 * 1024:
             await message.channel.send(
                 "❌ ไฟล์รูปภาพมีขนาดใหญ่เกินไป (จำกัด 5MB) โปรดลดขนาดรูปภาพ",
-                reference=message
+                reference=message.to_reference(fail_if_not_exists=False)
             )
             return
 
@@ -58,7 +58,7 @@ class SlipVerifier(commands.Cog):
             logger.error(f"[SlipVerifier] Error processing attachment {attachment.filename}: {e}", exc_info=True)
             await message.channel.send(
                 "❌ เกิดข้อผิดพลาดในระบบขณะประมวลผลรูปภาพ โปรดลองใหม่อีกครั้ง",
-                reference=message
+                reference=message.to_reference(fail_if_not_exists=False)
             )
 
     async def _verify_slip_data(
@@ -106,7 +106,7 @@ class SlipVerifier(commands.Cog):
             if err.code == 1008 and had_qr:
                 await message.channel.send(
                     "⚠️ **QR ดังกล่าวไม่ใช่ QR สำหรับการตรวจสอบการชำระเงิน**",
-                    reference=message
+                    reference=message.to_reference(fail_if_not_exists=False)
                 )
             return
 
@@ -121,19 +121,19 @@ class SlipVerifier(commands.Cog):
             logger.error(f"[SlipVerifier] Upstream or unrecognized SlipOK error ({err.code}): {err.message}")
             await message.channel.send(
                 "⚠️ **พบปัญหาในการติดต่อระบบตรวจสอบสลิป โปรดลองใหม่อีกครั้งภายหลัง**",
-                reference=message
+                reference=message.to_reference(fail_if_not_exists=False)
             )
             return
 
         await message.channel.send(
             f"⚠️ **พบปัญหาการตรวจสอบสลิป (อาจเป็นสลิปปลอมหรือไม่ถูกต้อง)**\n📝 **สาเหตุ:** `{sanitize_discord_text(err.message)}`",
-            reference=message
+            reference=message.to_reference(fail_if_not_exists=False)
         )
 
     async def _send_duplicate_warning(self, reason: str, message: discord.Message) -> None:
         await message.channel.send(
             f"❌ **สลิปซ้ำ! ถูกใช้งานไปแล้ว**\n🕒 **รายละเอียด:** `{sanitize_discord_text(reason)}`",
-            reference=message
+            reference=message.to_reference(fail_if_not_exists=False)
         )
 
     async def _handle_verification_success(self, slip_data: Dict[str, Any], message: discord.Message) -> None:
@@ -170,7 +170,7 @@ class SlipVerifier(commands.Cog):
             f"📤 **จาก:** `{sender}`\n"
             f"📥 **ไปยัง:** `{receiver}`\n"
             f"🔖 **อ้างอิง:** `{trans_ref}`",
-            reference=message
+            reference=message.to_reference(fail_if_not_exists=False)
         )
 
 
