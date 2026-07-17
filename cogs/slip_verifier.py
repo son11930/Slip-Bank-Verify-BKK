@@ -130,7 +130,7 @@ class SlipVerifier(commands.Cog):
             await message.channel.send(
                 f"ℹ️ **ระบบธนาคาร/ทรูมันนี่ขัดข้องชั่วคราว**\n"
                 f"📝 **สถานะ:** `{sanitize_discord_text(err.message)}`\n"
-                f"💡 *คำแนะนำ: ระบบ SlipOK ไม่สามารถดึงข้อมูลจากธนาคาร/TrueMoney ได้ในขณะนี้ และไม่ได้หักโควต้าสลิปของคุณ โปรดลองใหม่อีกครั้งในภายหลังครับ*",
+                f"💡 *คำแนะนำ: ระบบ Nethinat Verify Slip ไม่สามารถดึงข้อมูลจากธนาคาร/TrueMoney ได้ในขณะนี้ โปรดลองใหม่อีกครั้งในภายหลังครับ*",
                 reference=message.to_reference(fail_if_not_exists=False)
             )
             return
